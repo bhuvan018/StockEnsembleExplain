@@ -340,10 +340,15 @@ def main():
         all_metrics = pd.concat([individual_metrics, ensemble_metrics])
         all_metrics['Type'] = ['Individual'] * len(individual_metrics) + ['Ensemble'] * len(ensemble_metrics)
         
-        st.dataframe(
-            all_metrics.set_index('Model').style.format("{:.4f}").background_gradient(cmap='RdYlGn', axis=0),
-            use_container_width=True
+        numeric_cols = all_metrics.select_dtypes(include=['float', 'int']).columns
+        styled_df = all_metrics.set_index('Model').style.format(
+            {col: "{:.4f}" for col in numeric_cols}
+        ).background_gradient(
+            cmap="Blues", subset=numeric_cols
         )
+
+        st.dataframe(styled_df, use_container_width=True)
+
         
         st.markdown("---")
         st.subheader("Ensemble Weights & Contribution")
