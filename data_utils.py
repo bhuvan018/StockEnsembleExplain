@@ -59,10 +59,30 @@ class StockDataFetcher:
             df['MACD_hist'] = macd['MACDh_12_26_9']
         
         bbands = ta.bbands(df['Close'], length=20)
-        if bbands is not None:
-            df['BB_upper'] = bbands['BBU_20_2.0']
-            df['BB_middle'] = bbands['BBM_20_2.0']
-            df['BB_lower'] = bbands['BBL_20_2.0']
+        if bbands is not None and not bbands.empty:
+            # Dynamically identify the column names for Upper, Middle, and Lower Bands
+            # Standard names are usually BBU_X_Y, BBM_X_Y, BBL_X_Y
+            bb_cols = [col for col in bbands.columns if col.startswith('BB')]
+            
+            if len(bb_cols) >= 3:
+                # Assuming the order is BBL, BBM, BBU or similar, we assign them by content
+                
+                # BBU (Upper) is typically the highest value for a given row
+                bbu_col = [col for col in bb_cols if 'U' in col.split('_')[0]]
+                if bbu_col:
+                    df['BB_upper'] = bbands[bbu_col[0]]
+
+                # BBM (Middle) is typically the moving average
+                bbm_col = [col for col in bb_cols if 'M' in col.split('_')[0]]
+                if bbm_col:
+                    df['BB_middle'] = bbands[bbm_col[0]]
+
+                # BBL (Lower) is typically the lowest value
+                bbl_col = [col for col in bb_cols if 'L' in col.split('_')[0]]
+                if bbl_col:
+                    df['BB_lower'] = bbands[bbl_col[0]]
+            else:
+                print("Warning: Could not parse all Bollinger Band columns.")
         
         stoch = ta.stoch(df['High'], df['Low'], df['Close'])
         if stoch is not None:
