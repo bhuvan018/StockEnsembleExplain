@@ -64,17 +64,28 @@ def train_all_models(data_split, task='classification'):
         models['Linear Regression'] = lr_model
     
     with st.spinner("Training traditional ML models..."):
-        log_reg = LogisticRegressionModel()
-        log_reg.fit(X_train, y_train)
-        models['Logistic Regression'] = log_reg
-        
-        rf_model = RandomForestModel(n_estimators=50, max_depth=10, task=task)
-        rf_model.fit(X_train, y_train)
-        models['Random Forest'] = rf_model
-        
-        svm_model = SVMModel(task=task)
-        svm_model.fit(X_train, y_train)
-        models['SVM'] = svm_model
+        if task == 'classification':
+            log_reg = LogisticRegressionModel()
+            log_reg.fit(X_train, y_train)
+            models['Logistic Regression'] = log_reg
+            
+            rf_model = RandomForestModel(n_estimators=50, max_depth=10, task=task)
+            rf_model.fit(X_train, y_train)
+            models['Random Forest'] = rf_model
+            
+            svm_model = SVMModel(task=task)
+            svm_model.fit(X_train, y_train)
+            models['SVM'] = svm_model
+
+        else:  # regression task
+            rf_model = RandomForestModel(n_estimators=50, max_depth=10, task=task)
+            rf_model.fit(X_train, y_train)
+            models['Random Forest (Regressor)'] = rf_model
+            
+            svm_model = SVMModel(task=task)
+            svm_model.fit(X_train, y_train)
+            models['SVM (Regressor)'] = svm_model
+
     
     with st.spinner("Training deep learning models..."):
         lookback = 10
