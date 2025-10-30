@@ -78,42 +78,55 @@ def train_all_models(data_split, task='classification'):
     
     with st.spinner("Training deep learning models..."):
         lookback = 10
+
+        X_train_dl = X_train.copy()
+        X_test_dl = X_test.copy()
         n_features = X_train.shape[1] // lookback
         
-        if X_train.shape[1] % lookback != 0:
-            pad_size = lookback - (X_train.shape[1] % lookback)
-            X_train_padded = np.pad(X_train.values, ((0, 0), (0, pad_size)), mode='constant')
-            X_test_padded = np.pad(X_test.values, ((0, 0), (0, pad_size)), mode='constant')
-            X_train = pd.DataFrame(X_train_padded, index=X_train.index)
-            X_test = pd.DataFrame(X_test_padded, index=X_test.index)
+        if X_train_dl.shape[1] % lookback != 0:
+            pad_size = lookback - (X_train_dl.shape[1] % lookback)
+
+            X_train_padded = np.pad(X_train_dl.values, ((0, 0), (0, pad_size)), mode='constant')
+            X_test_padded = np.pad(X_test_dl.values, ((0, 0), (0, pad_size)), mode='constant')
+
+            X_train_dl = pd.DataFrame(X_train_padded, columns=list(X_train_dl.columns) + [f'PAD_{i}' for i in range(pad_size)], index=X_train_dl.index)
+            X_test_dl = pd.DataFrame(X_test_padded, columns=list(X_test_dl.columns) + [f'PAD_{i}' for i in range(pad_size)], index=X_test_dl.index)
         
-        gru_model = GRUModel(input_shape=X_train.shape[1], task=task, lookback=lookback)
-        gru_model.fit(X_train, y_train, epochs=30, batch_size=32, verbose=0)
+        gru_model = GRUModel(input_shape=X_train_dl.shape[1], task=task, lookback=lookback)
+        gru_model.fit(X_train_dl, y_train, epochs=30, batch_size=32, verbose=0)
         models['GRU'] = gru_model
         
-        lstm_model = LSTMModel(input_shape=X_train.shape[1], task=task, lookback=lookback)
-        lstm_model.fit(X_train, y_train, epochs=30, batch_size=32, verbose=0)
+        lstm_model = LSTMModel(input_shape=X_train_dl.shape[1], task=task, lookback=lookback)
+        lstm_model.fit(X_train_dl, y_train, epochs=30, batch_size=32, verbose=0)
         models['LSTM'] = lstm_model
     
     for name, model in models.items():
+
+        if name in ['GRU', 'LSTM']:
+            X_predict_train = X_train_dl
+            X_predict_test = X_test_dl
+        else:
+            X_predict_train = X_train
+            X_predict_test = X_test
+
         if name == 'Random Walk':
             if task == 'classification':
-                predictions_train[name] = model.predict_classification(X_train)
-                predictions_test[name] = model.predict_classification(X_test)
+                predictions_train[name] = model.predict_classification(X_predict_train)
+                predictions_test[name] = model.predict_classification(X_predict_test)
             else:
                 last_train_price = data_split['prices_train'].iloc[-1]
-                predictions_train[name] = model.predict(X_train, last_train_price)
-                predictions_test[name] = model.predict(X_test, last_train_price)
+                predictions_train[name] = model.predict(X_predict_train, last_train_price)
+                predictions_test[name] = model.predict(X_predict_test, last_train_price)
         elif name == 'Linear Regression':
             if task == 'classification':
-                predictions_train[name] = model.predict_classification(X_train)
-                predictions_test[name] = model.predict_classification(X_test)
+                predictions_train[name] = model.predict_classification(X_predict_train)
+                predictions_test[name] = model.predict_classification(X_predict_test)
             else:
-                predictions_train[name] = model.predict_regression(X_train)
-                predictions_test[name] = model.predict_regression(X_test)
+                predictions_train[name] = model.predict_regression(X_predict_train)
+                predictions_test[name] = model.predict_regression(X_predict_test)
         else:
-            predictions_train[name] = model.predict(X_train)
-            predictions_test[name] = model.predict(X_test)
+            predictions_train[name] = model.predict(X_predict_train)
+            predictions_test[name] = model.predict(X_predict_test)
     
     return models, predictions_train, predictions_test
 
