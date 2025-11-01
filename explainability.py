@@ -17,7 +17,19 @@ class ExplainabilityAnalyzer:
             return self._permutation_importance(model, X, y, feature_names)
         
         if hasattr(model, 'get_feature_importance'):
-            importance_df = model.get_feature_importance()
+            importance_df = None
+            getter = getattr(model, 'get_feature_importance')
+
+            # Try to call with feature names first (for models that expect them),
+            # then fallback to the original signature if provided.
+            try:
+                if feature_names is not None:
+                    importance_df = getter(feature_names)
+                else:
+                    importance_df = getter()
+            except TypeError:
+                importance_df = getter()
+
             if importance_df is not None:
                 return importance_df
         

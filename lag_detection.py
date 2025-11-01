@@ -1,7 +1,12 @@
 import numpy as np
 import pandas as pd
+import warnings
 from scipy.stats import pearsonr
-from scipy.signal import correlate
+
+try:
+    from scipy.stats import ConstantInputWarning  # type: ignore
+except ImportError:  # pragma: no cover
+    ConstantInputWarning = RuntimeWarning
 
 class LagDetector:
     def __init__(self, max_lag=10):
@@ -15,21 +20,54 @@ class LagDetector:
         correlations = []
         lags = range(-self.max_lag, self.max_lag + 1)
         
-        for lag in lags:
+        lags_list = list(lags)
+
+        for lag in lags_list:
             if lag < 0:
-                corr, _ = pearsonr(y_true_array[:lag], y_pred_array[-lag:])
+                true_slice = y_true_array[:lag]
+                pred_slice = y_pred_array[-lag:]
             elif lag > 0:
-                corr, _ = pearsonr(y_true_array[lag:], y_pred_array[:-lag])
+                true_slice = y_true_array[lag:]
+                pred_slice = y_pred_array[:-lag]
             else:
-                corr, _ = pearsonr(y_true_array, y_pred_array)
-            
-            correlations.append(corr)
+                true_slice = y_true_array
+                pred_slice = y_pred_array
+
+            if len(true_slice) < 2 or len(pred_slice) < 2:
+                correlations.append(0.0)
+                continue
+
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=ConstantInputWarning)
+                try:
+                    corr, _ = pearsonr(true_slice, pred_slice)
+                except Exception:
+                    corr = 0.0
+
+            if not np.isfinite(corr):
+                corr = 0.0
+
+            correlations.append(float(corr))
         
-        max_corr_idx = np.argmax(correlations)
-        detected_lag = lags[max_corr_idx]
-        max_correlation = correlations[max_corr_idx]
+        correlations = np.array(correlations)
+
+        if correlations.size == 0:
+            detected_lag = 0
+            max_correlation = 0.0
+        else:
+            max_corr_value = float(np.max(correlations))
+            candidate_indices = np.where(np.isclose(correlations, max_corr_value))[0]
+            zero_lag_index = self.max_lag if self.max_lag < correlations.size else None
+
+            if zero_lag_index is not None and zero_lag_index in candidate_indices:
+                max_corr_idx = zero_lag_index
+            else:
+                max_corr_idx = int(candidate_indices[0])
+
+            detected_lag = lags_list[max_corr_idx]
+            max_correlation = float(correlations[max_corr_idx])
         
-        zero_lag_correlation = correlations[self.max_lag]
+        zero_lag_correlation = float(correlations[self.max_lag]) if correlations.size else 0.0
         
         is_lagged = abs(detected_lag) > 0 and max_correlation > zero_lag_correlation + 0.05
         
