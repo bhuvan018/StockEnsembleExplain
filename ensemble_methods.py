@@ -191,41 +191,90 @@ class DynamicWeightingEnsemble:
         }
 
 
-def calculate_model_agreement(predictions_dict):
-    predictions_array = np.array([pred for pred in predictions_dict.values()])
-    
-    agreement_scores = []
-    n_samples = predictions_array.shape[1]
-    
-    for i in range(n_samples):
-        sample_predictions = predictions_array[:, i]
-        unique_predictions = np.unique(sample_predictions)
-        
-        if len(unique_predictions) == 1:
-            agreement_scores.append(1.0)
+def _stack_prediction_values(predictions_dict):
+    """Convert prediction containers to a stacked numpy array.
+
+    Ensures consistent shapes when predictions are provided as Series or lists
+    and trims to the minimum common length to avoid shape mismatches.
+    """
+
+    if not predictions_dict:
+        return np.empty((0, 0))
+
+    arrays = []
+    min_len = None
+
+    for pred in predictions_dict.values():
+        arr = np.asarray(pred)
+        if arr.ndim > 1:
+            arr = arr.reshape(arr.shape[0], -1)
+            if arr.shape[1] != 1:
+                raise ValueError("Predictions must be one-dimensional per model.")
+            arr = arr[:, 0]
+
+        if min_len is None:
+            min_len = arr.shape[0]
         else:
-            most_common = np.bincount(sample_predictions.astype(int)).max()
-            agreement_scores.append(most_common / len(sample_predictions))
-    
-    return np.array(agreement_scores)
+            min_len = min(min_len, arr.shape[0])
+
+        arrays.append(arr)
+
+    if min_len is None or min_len == 0:
+        return np.empty((len(arrays), 0))
+
+    stacked = np.vstack([arr[:min_len] for arr in arrays])
+    return stacked
+
+
+def calculate_model_agreement(predictions_dict, task='classification'):
+    predictions_array = _stack_prediction_values(predictions_dict)
+
+    if predictions_array.size == 0:
+        return np.array([])
+
+    if task == 'classification':
+        # Binarize for safety and compute the share of the majority vote.
+        discrete_preds = np.rint(predictions_array).astype(int)
+        discrete_preds = np.clip(discrete_preds, 0, 1)
+
+        agreement_scores = []
+        for sample_predictions in discrete_preds.T:
+            unique, counts = np.unique(sample_predictions, return_counts=True)
+            majority = counts.max()
+            agreement_scores.append(majority / counts.sum())
+
+        return np.array(agreement_scores)
+
+    # Regression agreement approximated via normalized dispersion.
+    std_per_sample = np.std(predictions_array, axis=0)
+    max_std = np.max(std_per_sample) if std_per_sample.size else 0
+
+    if max_std == 0:
+        return np.ones_like(std_per_sample)
+
+    agreement = 1 - (std_per_sample / max_std)
+    return agreement
 
 
 def calculate_ensemble_confidence(predictions_dict, task='classification'):
     if task == 'classification':
-        predictions_array = np.array([pred for pred in predictions_dict.values()])
-        
+        predictions_array = _stack_prediction_values(predictions_dict)
+
+        if predictions_array.size == 0:
+            return np.array([])
+
         confidence_scores = []
-        n_samples = predictions_array.shape[1]
-        
-        for i in range(n_samples):
-            sample_predictions = predictions_array[:, i]
+
+        for sample_predictions in predictions_array.T:
             positive_ratio = np.mean(sample_predictions)
             confidence = max(positive_ratio, 1 - positive_ratio)
             confidence_scores.append(confidence)
-        
+
         return np.array(confidence_scores)
     else:
-        predictions_array = np.array([pred for pred in predictions_dict.values()])
+        predictions_array = _stack_prediction_values(predictions_dict)
+        if predictions_array.size == 0:
+            return np.array([])
         std_scores = np.std(predictions_array, axis=0)
         max_std = np.max(std_scores) if len(std_scores) > 0 else 1
         

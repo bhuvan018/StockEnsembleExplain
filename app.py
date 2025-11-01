@@ -388,7 +388,7 @@ def main():
         st.markdown("---")
         st.subheader("Model Agreement Analysis")
         
-        agreement_scores = calculate_model_agreement(predictions_test)
+        agreement_scores = calculate_model_agreement(predictions_test, task=task_type)
         confidence_scores = calculate_ensemble_confidence(predictions_test, task=task_type)
         
         fig = go.Figure()
